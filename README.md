@@ -1,4 +1,6 @@
-📘 Node.js Advanced Logger
+📘 ###Node-logx### 
+
+A Node.js Advanced Logger
 
 A fully-featured, production-ready logging system for Node.js applications.
 This logger includes:
