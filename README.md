@@ -1,4 +1,4 @@
-📘 ###Node-logx### 
+#📘 Node-logx
 
 A Node.js Advanced Logger
 
