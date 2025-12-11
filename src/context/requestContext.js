@@ -1,7 +1,7 @@
 import {AsyncLocalStorage} from 'async_hooks';
 import crypto from 'crypto';
 
-const storage = new AsyncLocalStorage();
+const storage = new AsyncLocalStorage(); // Create an instance of AsyncLocalStorage for request context
 
 export const requestContext = {
   run(callback) {

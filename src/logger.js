@@ -6,35 +6,52 @@ import { auditFileTransport } from "./transports/auditFileTransport.js";
 import { requestContext } from "./context/requestContext.js";
 import { HttpTransport } from "./transports/httpTransport.js";
 import { redact } from "./utils/redact.js";
+import { baseFormatter } from "./formatters/baseFormatter.js";
+import { jsonFormatter } from "./formatters/jsonFormatter.js";
+import { humanFormatter } from "./formatters/humanFormatter.js";
+
 
 
 export class Logger {
   constructor(options = {}) {
+
+    // --- Formatter support ---
+    this.formatters = options.formatters || [];  
+    this.formatters.push(baseFormatter); // Always applied last
+
     this.logDir = options.logDir || 'logs';
     ensureLogDir(this.logDir);
 
     const env = process.env.NODE_ENV || 'development';
 
     // Choose level automatically unless user overrides
+
     const level = options.level || (
       env === "production" ? "info" :
       env === "test" ? "warn" :
       "debug" // development default
     );
 
-    // Unified format for all logs
-    const logFormat = winston.format.combine(
-      winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
-      winston.format.errors({ stack: true }),  // includes stack trace
-      winston.format.metadata({ fillExcept: ["message", "level", "timestamp"] }),
-      winston.format.json()
-    );
+    // Final format function applying all formatters
 
+    const finalFormat = winston.format.printf((info) => {
+      let data = { ...info };
+      for (const formatter of this.formatters) {
+        data = formatter(data);
+      }
+      return typeof data === "string"
+        ? data
+        : JSON.stringify(data);
+    });
 
     // Create Winston logger instance
     this.logger = winston.createLogger({
       level,
       format: winston.format.combine(
+
+        // timestamp
+        winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
+
         // 1. Inject correlationId
 
         winston.format((info) => {
@@ -46,6 +63,7 @@ export class Logger {
         })(),
 
         // 2. Redact sensitive info
+
         winston.format((info) => {
           if(info && typeof info === 'object') {
             info = {...info};
@@ -55,27 +73,49 @@ export class Logger {
         }) (),
 
         // 3. Final formatting
-        winston.format.json()
+
+        finalFormat
       ),
+
       transports: [
-        consoleTransport(),    // console logs (pretty, colorized)
-        fileTransport(this.logDir),   // Rotating app logs
-        auditFileTransport(this.logDir),   // Rotating audit logs
+        consoleTransport(),                             // console logs (pretty, colorized)
+        fileTransport(this.logDir),                    // Rotating app logs
+        auditFileTransport(this.logDir),              // Rotating audit logs
         // ...(options.httpEndpoint ? [ httpTransport(options.httpEndpoint) ] : [])
       ],
     });
 
-    // Optional HTTP transport
+  // Add HTTP transport if configured
     if (options.httpEndpoint) {
       this.logger.add(
         new HttpTransport({
           endpoint: options.httpEndpoint,
-          headers: options.httpHeaders || {}
+          headers: options.httpHeaders || {},
+          flushInterval: options.flushInterval || 3000,
+          maxBuffer: options.maxBuffer || 20
         })
       );
     }
   }
-   
+
+  // Ensures meta objects are JSON-safe.
+  _cleanMeta(meta) {
+    const safeMeta = (() => {
+      try {
+      return JSON.parse(JSON.stringify(meta));  
+    } catch {
+      return { invalidMeta: true };
+    }
+    }) ();
+    
+    const requestId = requestContext.getRequestId();
+    if (requestId) {
+      safeMeta.requestId = requestId;
+    }
+    return safeMeta;
+  }
+
+  // Standard log methods (wrappers)
   info(message, meta = {}) {    
     this.logger.info(message, this._cleanMeta(meta));
   }
@@ -104,23 +144,6 @@ export class Logger {
       requestId,
       timestamp: new Date().toISOString()
     });
-  }
-
-  // Ensures meta objects are JSON-safe.
-  _cleanMeta(meta) {
-    const safeMeta = (() => {
-      try {
-      return JSON.parse(JSON.stringify(meta));  
-    } catch {
-      return { invalidMeta: true };
-    }
-    }) ();
-    
-    const requestId = requestContext.getRequestId();
-    if (requestId) {
-      safeMeta.requestId = requestId;
-    }
-    return safeMeta;
   }
 }
 
