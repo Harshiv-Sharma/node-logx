@@ -1,15 +1,23 @@
-import { randomUUID } from "crypto";
-import { setRequestContext } from "../context/requestContext.js";
 
+import { randomUUID } from "crypto";
+import { requestContext } from "../context/requestContext.js";
 
 export function correlationIdMiddleware(req, res, next) {
-  const correlationId = randomUUID();
+  // Accept incoming header or create new one
+  const incoming = req.headers["x-correlation-id"] || req.headers["x-request-id"];
+;
+  const correlationId = incoming || randomUUID();
 
-  // Store in request context (async context)
-  setRequestContext({ correlationId });
+  requestContext.run(() => {
+    const store = requestContext.get();
+    store.correlationId = correlationId;
 
-  // Also attach to req for convenience
-  req.correlationId = correlationId;
+    // Expose it on req
+    req.correlationId = correlationId;
 
-  next();
+    // set response header
+    res.setHeader("x-correlation-id", correlationId);
+
+    next();
+  });
 }

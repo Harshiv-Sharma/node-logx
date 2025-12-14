@@ -1,21 +1,30 @@
-import {AsyncLocalStorage} from 'async_hooks';
-import crypto from 'crypto';
 
-const storage = new AsyncLocalStorage(); // Create an instance of AsyncLocalStorage for request context
+import { AsyncLocalStorage } from "async_hooks";
+
+const storage = new AsyncLocalStorage();
 
 export const requestContext = {
   run(callback) {
-    const requestId = crypto.randomUUID();
-    storage.run({ requestId }, callback);
-  },
-  
-  getRequestId() {
-    const store = storage.getStore();
-    return store ? store.requestId : null;
+    // start an empty context; middleware will set correlationId
+    storage.run(Object.create(null), callback);
   },
 
-  getRequestContext() {
+  setCorrelationId(id) {
+    const store = storage.getStore();
+    if (store) store.correlationId = id;
+  },
+
+  set(key, value) {
+    const store = storage.getStore();
+    if (store) store[key] = value;
+  },
+
+  getCorrelationId() {
+    const store = storage.getStore();
+    return store?.correlationId || null;
+  },
+
+  get() {
     return storage.getStore() || {};
   }
-
-}
+};

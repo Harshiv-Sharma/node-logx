@@ -1,33 +1,26 @@
-import { Logger } from "./logger.js";
-import { requestContext } from "../context/requestContext.js";
 
 
-export function loggerMiddleware(req, res, next) {
-  const requsetId = crypto.randomUUID();
-  const startTime = process.hrtime.bigint(); // High-resolution start time
+export function loggerMiddleware(logger) {
+  return function (req, res, next) {
+    const startTime = process.hrtime.bigint();
 
-  // storing id in asyncLocalStorage for corelation IDs
-  requestContext.run({ requestId }, () => {
-    Logger.info(`Incoming request` , {
+    logger.info("Incoming request", {
       method: req.method,
       url: req.originalUrl,
-      requestId,
     });
 
-  // When the response is finished, log duration
-    res.on('finish', () => {
-      const endTime = process.hrtime.bigint();
-      const durationMs = Number(endTime - startTime) / 1_000_000; // Convert to milliseconds
+    res.on("finish", () => {
+      const durationMs =
+        Number(process.hrtime.bigint() - startTime) / 1_000_000;
 
-      Logger.info(`Request completed`, {
+      logger.info("Request completed", {
         method: req.method,
         url: req.originalUrl,
         statusCode: res.statusCode,
-        duration: `${durationMs.toFixed(2)} ms`,
-        requestId
-  });
+        durationMs: durationMs.toFixed(2),
+      });
     });
 
     next();
-  });  
+  };
 }

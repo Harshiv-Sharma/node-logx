@@ -9,20 +9,20 @@ import { redact } from "./utils/redact.js";
 import { baseFormatter } from "./formatters/baseFormatter.js";
 import { jsonFormatter } from "./formatters/jsonFormatter.js";
 import { humanFormatter } from "./formatters/humanFormatter.js";
-
+ 
 
 
 export class Logger {
   constructor(options = {}) {
 
-    // --- Formatter support ---
-    this.formatters = options.formatters || [];  
-    this.formatters.push(baseFormatter); // Always applied last
-
     this.logDir = options.logDir || 'logs';
     ensureLogDir(this.logDir);
 
     const env = process.env.NODE_ENV || 'development';
+    
+    // --- Formatter support ---
+    this.formatters = options.formatters || [];  
+    this.formatters.push(baseFormatter); // Always applied last
 
     // Choose level automatically unless user overrides
 
@@ -55,9 +55,9 @@ export class Logger {
         // 1. Inject correlationId
 
         winston.format((info) => {
-          const ctx = requestContext.getRequestContext();
-          if (ctx?.correlationId) {
-            info.correlationId = ctx.correlationId;
+          const correlationId = requestContext.getCorrelationId();
+          if (correlationId) {
+            info.correlationId = correlationId;
           }
           return info;
         })(),
@@ -108,10 +108,6 @@ export class Logger {
     }
     }) ();
     
-    const requestId = requestContext.getRequestId();
-    if (requestId) {
-      safeMeta.requestId = requestId;
-    }
     return safeMeta;
   }
 
@@ -134,15 +130,11 @@ export class Logger {
 
   // Audit logs (immutable-style event logging).
   audit(action, user, details = {}) {
-    const requestId = requestContext.getRequestId();
-
     this.logger.info(`Audit - ${action}`, {
       audit: true,
       user,
       details,
       eventType: "AUDIT",
-      requestId,
-      timestamp: new Date().toISOString()
     });
   }
 }
